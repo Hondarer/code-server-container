@@ -82,6 +82,25 @@ podman exec code-server-ol8_1 \
 `delete`は対象のContainer App、環境ストレージ登録、Azure Files Share、ローカルの
 パスワードファイルを削除します。必要な永続データは、実行前に`download`で退避してください。
 
+## コンテナ内の開発サーバー
+
+> [!TIP]
+> MkDocsなどをコンテナ内の8000番ポートで起動しても、現在の構成では
+> `http://<ホスト名>:8000`として外部へ直接公開されません。code-serverへログインした
+> ブラウザから、次のポートプロキシURLでアクセスできます。
+>
+> - ローカル: `http://localhost:8080/proxy/8000/`
+> - Azure Container Apps: `https://<利用者のFQDN>/proxy/8000/`
+>
+> 例えば、code-serverのターミナルで次のように起動します。
+>
+> ```bash
+> mkdocs serve --dev-addr 127.0.0.1:8000
+> ```
+>
+> ローカルのインスタンス番号が2以降の場合は、URLの8080を対応するcode-serverポート
+> （インスタンス2なら8081）へ読み替えてください。
+
 ## ドキュメント
 
 - [ドキュメント一覧](docs/README.md)
