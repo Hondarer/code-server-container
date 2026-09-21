@@ -120,7 +120,7 @@ if podman exec "$CONTAINER_NAME" sh -lc \
     exit 1
 fi
 podman exec "$CONTAINER_NAME" sh -lc \
-    "clang-format --version | grep -F 'clang-format version 22.1.4' >/dev/null"
+    "clang-format --version | grep -F 'clang-format version 23.1.1' >/dev/null"
 podman exec "$CONTAINER_NAME" command -v git-clang-format >/dev/null
 podman exec "$CONTAINER_NAME" sh -lc '
     [ "$(command -v clangd)" = /usr/local/bin/clangd ]

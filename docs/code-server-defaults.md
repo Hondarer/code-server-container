@@ -66,8 +66,8 @@ clangd archiveはversionとSHA-256を`src/Dockerfile`で固定し、
 clangdをダウンロードする必要はありません。公式Linux standalone版の対象に合わせ、完成
 イメージはx86_64限定です。
 
-ベースイメージの`clang-format 22.1.4`と`git-clang-format`はそのまま維持します。clangdと
-clang-formatは同じLLVM 22系列ですが、patch versionはそれぞれ22.1.0と22.1.4です。
+ベースイメージの`clang-format 23.1.1`と`git-clang-format`はそのまま維持します。clangdは
+公式standalone版の22.1.0を独立して固定しているため、clang-formatとはversion系列が異なります。
 
 clangdに実際のbuild optionを認識させるには、対象プロジェクトで`compile_commands.json`を
 生成します。CMakeでは、例えば次のように生成できます。
@@ -164,7 +164,7 @@ User settingsを最後に配置するため、拡張機能の導入・検証やM
 - 解決済みマニフェストとインストール版の一致
 - VSIXのSHA-256
 - 日本語Language Packとテーマの提供、およびlocaleを起動引数で強制していないこと
-- clang-format 22.1.4とgit-clang-formatを維持していること
+- clang-format 23.1.1とgit-clang-formatを維持していること
 - clangd 22.1.0が起動し、簡単なCソースを解析できること
 - clangd拡張の解決済みversionと導入済みversionが一致すること
 - webfreak.debug(Native Debug)拡張の解決済みversionと導入済みversionが一致すること

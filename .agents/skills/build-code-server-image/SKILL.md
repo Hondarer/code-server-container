@@ -20,7 +20,7 @@ description: GHCR の Oracle Linux 8 latest を基に code-server イメージ�
 - sibling directory やローカルのベース image に依存させない。各 build で `ghcr.io/hondarer/oracle-linux-container/oracle-linux-8-dev:latest` を pull し、その build 内では digest 固定する。
 - `src/code-server-defaults/extensions.txt` は `publisher.name` と `publisher.name@version` の両方を受理する。build 時に VSIX と SHA-256 を確定し、実行時はネットワークなしで導入できる状態にする。
 - `User/settings.json` を初期化完了マーカーにする。存在時はUser・Machine設定、manifest、導入済み拡張を評価せず、欠落時だけ拡張導入後に`Machine/settings.json`、最後に`User/settings.json`を配置する。
-- clang-format 22.1.4とgit-clang-formatを維持する。x86_64向け公式clangd 22.1.0をSHA-256固定で同梱し、初期拡張に`llvm-vs-code-extensions.vscode-clangd`を含める。runtimeでclangdをダウンロードしない。
+- clang-format 23.1.1とgit-clang-formatを維持する。x86_64向け公式clangd 22.1.0をSHA-256固定で同梱し、初期拡張に`llvm-vs-code-extensions.vscode-clangd`を含める。runtimeでclangdをダウンロードしない。
 - build が既存ローカルコンテナを停止し得るため、必要なら最後に `./start-pod.sh 1` で復旧する。永続 volume を削除しない。
 
 ## Completion Criteria
