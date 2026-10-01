@@ -123,21 +123,10 @@ case "$1 $2" in
             *) exit 1 ;;
         esac
         ;;
-    "storage remove")
-        [ "$MOCK_REMOVE_FAILURE" != true ] || exit 1
-        path=''
-        while [ "$#" -gt 0 ]; do
-            if [ "$1" = "--path" ]; then
-                path="$2"
-                break
-            fi
-            shift
-        done
-        case "$path" in
-            home) rm -f "$MOCK_HOME_DIR" ;;
-            workspace) rm -f "$MOCK_WORKSPACE_DIR" ;;
-            *) exit 1 ;;
-        esac
+    "storage share")
+        [ "$3" = generate-sas ] || exit 1
+        [ -n "${AZURE_STORAGE_KEY:-}" ] || exit 1
+        echo 'sv=test&sig=test'
         ;;
     "containerapp show")
         [ -f "$MOCK_STATE" ] || exit 1
@@ -225,6 +214,18 @@ printf '%s\n' "$*" >> "$MOCK_CURL_LOG"
 exit 0
 EOF
 chmod +x "$TEST_DIR/bin/curl"
+
+cat > "$TEST_DIR/bin/azcopy" <<'EOF'
+#!/bin/bash
+printf 'azcopy %s\n' "$*" >> "$MOCK_LOG"
+[ "$MOCK_REMOVE_FAILURE" != true ] || exit 1
+case "$1:$2" in
+    remove:*/code-server-alice/home\?*) rm -f "$MOCK_HOME_DIR" ;;
+    remove:*/code-server-alice/workspace\?*) rm -f "$MOCK_WORKSPACE_DIR" ;;
+    *) exit 1 ;;
+esac
+EOF
+chmod +x "$TEST_DIR/bin/azcopy"
 
 export PATH="$TEST_DIR/bin:$PATH"
 
@@ -314,14 +315,14 @@ grep -q $'Succeeded\tStopped' <<< "$suspend_output"
 "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/config.env" suspend alice >/dev/null 2>&1
 test "$(grep -c '/stop?api-version=2025-07-01' "$MOCK_LOG")" = "$after_stop_count"
 
-before_reset_mutations="$(grep -Ec '^(storage remove|storage directory (create|delete)|rest --method)' "$MOCK_LOG" || true)"
+before_reset_mutations="$(grep -Ec '^(azcopy remove|storage directory (create|delete)|rest --method)' "$MOCK_LOG" || true)"
 if printf 'alice\n' | "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/config.env" \
     reset alice >/dev/null 2>"$TEST_DIR/reset-confirmation.err"; then
     echo 'reset accepted an incomplete confirmation' >&2
     exit 1
 fi
 grep -q 'nothing was reset' "$TEST_DIR/reset-confirmation.err"
-test "$before_reset_mutations" = "$(grep -Ec '^(storage remove|storage directory (create|delete)|rest --method)' "$MOCK_LOG" || true)"
+test "$before_reset_mutations" = "$(grep -Ec '^(azcopy remove|storage directory (create|delete)|rest --method)' "$MOCK_LOG" || true)"
 
 before_reset_rest_count="$(grep -c '^rest --method' "$MOCK_LOG" || true)"
 before_reset_job_start_count="$(grep -c '^containerapp job start' "$MOCK_LOG" || true)"
@@ -331,8 +332,8 @@ grep -q 'instance remains stopped' <<< "$reset_output"
 grep -q 'resume alice' <<< "$reset_output"
 test -f "$MOCK_HOME_DIR"
 test -f "$MOCK_WORKSPACE_DIR"
-grep -q '^storage remove.*--path home --recursive' "$MOCK_LOG"
-grep -q '^storage remove.*--path workspace --recursive' "$MOCK_LOG"
+grep -q '^azcopy remove .*/home?.*--recursive --force-if-read-only' "$MOCK_LOG"
+grep -q '^azcopy remove .*/workspace?.*--recursive --force-if-read-only' "$MOCK_LOG"
 test "$before_reset_rest_count" = "$(grep -c '^rest --method' "$MOCK_LOG" || true)"
 test "$(grep -c '^containerapp job start' "$MOCK_LOG")" -eq $((before_reset_job_start_count + 1))
 grep -q '^containerapp job execution show.*code-server-ol8-alice-init' "$MOCK_LOG"
@@ -345,7 +346,7 @@ if printf 'reset alice\n' | "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/conf
 fi
 grep -q 'init Job execution' "$TEST_DIR/reset-job-failure.err"
 export MOCK_JOB_EXECUTION_STATUS=Succeeded
-if grep -E '^storage (remove|directory exists)' "$MOCK_LOG" | grep -q -- '--account-key test-key'; then
+if grep -E '^(azcopy remove|storage (share generate-sas|directory exists))' "$MOCK_LOG" | grep -q -- 'test-key'; then
     echo 'reset exposed the storage key in command arguments' >&2
     exit 1
 fi
@@ -373,13 +374,13 @@ fi
 touch "$MOCK_SHARE"
 
 export MOCK_KEY_FAILURE=true
-before_key_failure_count="$(grep -c '^storage remove' "$MOCK_LOG")"
+before_key_failure_count="$(grep -c '^azcopy remove' "$MOCK_LOG")"
 if printf 'reset alice\n' | "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/config.env" \
     reset alice >/dev/null 2>&1; then
     echo 'reset accepted a missing storage key' >&2
     exit 1
 fi
-test "$before_key_failure_count" = "$(grep -c '^storage remove' "$MOCK_LOG")"
+test "$before_key_failure_count" = "$(grep -c '^azcopy remove' "$MOCK_LOG")"
 export MOCK_KEY_FAILURE=false
 
 export MOCK_CREATE_FAILURE=home
@@ -417,14 +418,14 @@ grep -q '/healthz' "$MOCK_CURL_LOG"
 "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/config.env" resume alice >/dev/null 2>&1
 test "$(grep -c '/start?api-version=2025-07-01' "$MOCK_LOG")" = "$after_start_count"
 
-before_running_reset_count="$(grep -c '^storage remove' "$MOCK_LOG")"
+before_running_reset_count="$(grep -c '^azcopy remove' "$MOCK_LOG")"
 if printf 'reset alice\n' | "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/config.env" \
     reset alice >/dev/null 2>"$TEST_DIR/running-reset.err"; then
     echo 'reset was accepted while running' >&2
     exit 1
 fi
 grep -q 'suspend alice' "$TEST_DIR/running-reset.err"
-test "$before_running_reset_count" = "$(grep -c '^storage remove' "$MOCK_LOG")"
+test "$before_running_reset_count" = "$(grep -c '^azcopy remove' "$MOCK_LOG")"
 
 mkdir "$TEST_DIR/download-default"
 (
@@ -526,13 +527,13 @@ for state_pair in 'Succeeded Progressing' 'Failed Running' 'Succeeded Unknown'; 
     read -r provisioning running <<< "$state_pair"
     printf '%s\n' "$provisioning" > "$MOCK_PROVISIONING"
     printf '%s\n' "$running" > "$MOCK_RUNNING"
-    before_reset_count="$(grep -c '^storage remove' "$MOCK_LOG")"
+    before_reset_count="$(grep -c '^azcopy remove' "$MOCK_LOG")"
     if printf 'reset alice\n' | "$REPO_DIR/aca-instance.sh" --config "$TEST_DIR/config.env" \
         reset alice >/dev/null 2>&1; then
         echo "reset was accepted while provisioning=${provisioning}, running=${running}" >&2
         exit 1
     fi
-    test "$before_reset_count" = "$(grep -c '^storage remove' "$MOCK_LOG")"
+    test "$before_reset_count" = "$(grep -c '^azcopy remove' "$MOCK_LOG")"
 done
 printf 'Succeeded\n' > "$MOCK_PROVISIONING"
 printf 'Stopped\n' > "$MOCK_RUNNING"

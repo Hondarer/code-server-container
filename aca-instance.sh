@@ -77,7 +77,7 @@ APP_NAME_PREFIX="${APP_NAME_PREFIX:-code-server-ol8}"
 FILE_SHARE_PREFIX="${FILE_SHARE_PREFIX:-code-server}"
 ENV_STORAGE_PREFIX="${ENV_STORAGE_PREFIX:-code-server}"
 PASSWORD_DIR="${PASSWORD_DIR:-${HOME}/.azure/code-server-aca/instances}"
-FILE_SHARE_QUOTA_GIB="${FILE_SHARE_QUOTA_GIB:-20}"
+FILE_SHARE_QUOTA_GIB="${FILE_SHARE_QUOTA_GIB:-40}"
 CONTAINER_APP_CPU="${CONTAINER_APP_CPU:-4.0}"
 CONTAINER_APP_MEMORY="${CONTAINER_APP_MEMORY:-8Gi}"
 SCALING_MODE="${SCALING_MODE:-disabled}"
@@ -752,6 +752,23 @@ download_instance() {
     printf 'Saved instance data: %s\n' "$output_path"
 }
 
+# Git object files carry the read-only attribute, which `az storage remove` cannot
+# override. Call AzCopy directly with a short-lived share SAS instead of the key.
+remove_share_directory() {
+    local storage_key="$1" directory="$2" azcopy_bin sas expiry
+    azcopy_bin="$(command -v azcopy || true)"
+    [ -n "$azcopy_bin" ] || azcopy_bin="${AZURE_CONFIG_DIR:-$HOME/.azure}/bin/azcopy"
+    [ -x "$azcopy_bin" ] || die "AzCopy not found; run any 'az storage copy' command once to install it."
+    expiry="$(date -u -d '+1 hour' '+%Y-%m-%dT%H:%MZ')"
+    sas="$(AZURE_STORAGE_KEY="$storage_key" az storage share generate-sas \
+        --account-name "$STORAGE_ACCOUNT" --name "$FILE_SHARE" --permissions rwdl \
+        --expiry "$expiry" --https-only -o tsv)"
+    [ -n "$sas" ] || die "Could not create a SAS for share ${FILE_SHARE}."
+    "$azcopy_bin" remove \
+        "https://${STORAGE_ACCOUNT}.file.core.windows.net/${FILE_SHARE}/${directory}?${sas}" \
+        --recursive --force-if-read-only >&2
+}
+
 reset_instance() {
     local confirmation storage_key directory exists
     set_instance_vars "$1"
@@ -780,9 +797,7 @@ reset_instance() {
             --account-name "$STORAGE_ACCOUNT" --share-name "$FILE_SHARE" \
             --name "$directory" --query exists -o tsv)"
         if [ "$exists" = "true" ]; then
-            AZURE_STORAGE_KEY="$storage_key" az storage remove \
-                --account-name "$STORAGE_ACCOUNT" --share-name "$FILE_SHARE" \
-                --path "$directory" --recursive -o none
+            remove_share_directory "$storage_key" "$directory"
         fi
     done
     for directory in home workspace; do
